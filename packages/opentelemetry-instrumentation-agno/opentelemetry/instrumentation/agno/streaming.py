@@ -39,6 +39,14 @@ class AgnoAsyncStream(ObjectProxy):
     def __aiter__(self):
         return self
 
+    async def aclose(self):
+        """Close the wrapped stream and end the span if it is still open."""
+        try:
+            if aclose := getattr(self.__wrapped__, "aclose", None):
+                await aclose()
+        finally:
+            self._complete_instrumentation()
+
     async def __anext__(self):
         try:
             event = await self.__wrapped__.__anext__()
@@ -140,7 +148,25 @@ class AgnoStream(ObjectProxy):
         self._self_instrumentation_completed = False
 
     def __iter__(self):
-        return self
+        # A generator, so a caller that breaks out of the loop closes it and the
+        # finally block ends the span with what was read so far.
+        try:
+            while True:
+                try:
+                    event = self.__next__()
+                except StopIteration:
+                    return
+                yield event
+        finally:
+            self._complete_instrumentation()
+
+    def close(self):
+        """Close the wrapped stream and end the span if it is still open."""
+        try:
+            if close := getattr(self.__wrapped__, "close", None):
+                close()
+        finally:
+            self._complete_instrumentation()
 
     def __next__(self):
         try:
