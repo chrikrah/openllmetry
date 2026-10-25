@@ -1,5 +1,6 @@
 """OpenTelemetry Voyage AI instrumentation"""
 
+import inspect
 import logging
 from typing import Collection
 
@@ -80,6 +81,18 @@ def _with_tracer_wrapper(func):
     return _with_tracer
 
 
+def _call_arguments(wrapped, args, kwargs):
+    """Map positional and keyword arguments to parameter names.
+
+    Voyage's docs call embed(texts, ...) and rerank(query, documents, ...)
+    positionally, and the span helpers look arguments up by name.
+    """
+    try:
+        return inspect.signature(wrapped).bind_partial(*args, **kwargs).arguments
+    except (TypeError, ValueError):
+        return kwargs
+
+
 @dont_throw
 def _handle_input_content(span, operation_name, kwargs):
     set_input_content_attributes(span, operation_name, kwargs)
@@ -117,8 +130,9 @@ def _wrap(
     )
 
     try:
-        set_span_request_attributes(span, kwargs)
-        _handle_input_content(span, operation_name, kwargs)
+        call_arguments = _call_arguments(wrapped, args, kwargs)
+        set_span_request_attributes(span, call_arguments)
+        _handle_input_content(span, operation_name, call_arguments)
 
         response = wrapped(*args, **kwargs)
 
@@ -161,8 +175,9 @@ async def _awrap(
     )
 
     try:
-        set_span_request_attributes(span, kwargs)
-        _handle_input_content(span, operation_name, kwargs)
+        call_arguments = _call_arguments(wrapped, args, kwargs)
+        set_span_request_attributes(span, call_arguments)
+        _handle_input_content(span, operation_name, call_arguments)
 
         response = await wrapped(*args, **kwargs)
 

@@ -86,3 +86,47 @@ async def test_voyageai_embed_async_legacy(
     # Verify embeddings were returned
     assert result is not None
     assert len(result.embeddings) == 2
+
+
+@pytest.mark.vcr
+@pytest.mark.default_cassette("test_voyageai_embed_legacy.yaml")
+def test_voyageai_embed_positional_args(
+    span_exporter, instrument_legacy, voyageai_client
+):
+    texts = [
+        "The capital of France is Paris.",
+        "London is the capital of England.",
+        "Berlin is the capital of Germany.",
+    ]
+
+    voyageai_client.embed(texts, "voyage-3-lite", "document")
+
+    (voyageai_span,) = span_exporter.get_finished_spans()
+    assert (
+        voyageai_span.attributes.get(GenAIAttributes.GEN_AI_REQUEST_MODEL)
+        == "voyage-3-lite"
+    )
+    content = voyageai_span.attributes.get(f"{GenAIAttributes.GEN_AI_PROMPT}.0.content")
+    assert [item["text"] for item in json.loads(content)] == texts
+
+
+@pytest.mark.vcr
+@pytest.mark.default_cassette("test_voyageai_embed_async_legacy.yaml")
+@pytest.mark.asyncio
+async def test_voyageai_embed_async_positional_args(
+    span_exporter, instrument_legacy, async_voyageai_client
+):
+    texts = [
+        "The capital of France is Paris.",
+        "London is the capital of England.",
+    ]
+
+    await async_voyageai_client.embed(texts, "voyage-3-lite", "document")
+
+    (voyageai_span,) = span_exporter.get_finished_spans()
+    assert (
+        voyageai_span.attributes.get(GenAIAttributes.GEN_AI_REQUEST_MODEL)
+        == "voyage-3-lite"
+    )
+    content = voyageai_span.attributes.get(f"{GenAIAttributes.GEN_AI_PROMPT}.0.content")
+    assert [item["text"] for item in json.loads(content)] == texts

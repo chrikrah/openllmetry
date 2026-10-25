@@ -111,3 +111,58 @@ async def test_voyageai_rerank_async_legacy(
     # Verify results were returned
     assert result is not None
     assert len(result.results) == 2
+
+
+def _prompt_contents(span, count):
+    return [
+        span.attributes.get(f"{GenAIAttributes.GEN_AI_PROMPT}.{i}.content")
+        for i in range(count)
+    ]
+
+
+@pytest.mark.vcr
+@pytest.mark.default_cassette("test_voyageai_rerank_legacy.yaml")
+def test_voyageai_rerank_positional_args(
+    span_exporter, instrument_legacy, voyageai_client
+):
+    query = "What is the capital of France?"
+    documents = [
+        "Paris is the capital of France and is known for the Eiffel Tower.",
+        "London is the capital of England and has Big Ben.",
+        "Berlin is the capital of Germany.",
+        "The capital of France is Paris, a beautiful city.",
+    ]
+
+    voyageai_client.rerank(query, documents, "rerank-2-lite", 3)
+
+    (voyageai_span,) = span_exporter.get_finished_spans()
+    assert (
+        voyageai_span.attributes.get(GenAIAttributes.GEN_AI_REQUEST_MODEL)
+        == "rerank-2-lite"
+    )
+    assert voyageai_span.attributes.get(GenAIAttributes.GEN_AI_REQUEST_TOP_K) == 3
+    assert _prompt_contents(voyageai_span, len(documents) + 1) == documents + [query]
+
+
+@pytest.mark.vcr
+@pytest.mark.default_cassette("test_voyageai_rerank_async_legacy.yaml")
+@pytest.mark.asyncio
+async def test_voyageai_rerank_async_positional_args(
+    span_exporter, instrument_legacy, async_voyageai_client
+):
+    query = "What is the capital of France?"
+    documents = [
+        "Paris is the capital of France and is known for the Eiffel Tower.",
+        "London is the capital of England and has Big Ben.",
+        "Berlin is the capital of Germany.",
+    ]
+
+    await async_voyageai_client.rerank(query, documents, "rerank-2-lite", 2)
+
+    (voyageai_span,) = span_exporter.get_finished_spans()
+    assert (
+        voyageai_span.attributes.get(GenAIAttributes.GEN_AI_REQUEST_MODEL)
+        == "rerank-2-lite"
+    )
+    assert voyageai_span.attributes.get(GenAIAttributes.GEN_AI_REQUEST_TOP_K) == 2
+    assert _prompt_contents(voyageai_span, len(documents) + 1) == documents + [query]
