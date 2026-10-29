@@ -44,6 +44,9 @@ class AgnoAsyncStream(ObjectProxy):
         try:
             if aclose := getattr(self.__wrapped__, "aclose", None):
                 await aclose()
+        except Exception as e:
+            self._fail(e)
+            raise
         finally:
             self._complete_instrumentation()
 
@@ -55,12 +58,7 @@ class AgnoAsyncStream(ObjectProxy):
                 self._complete_instrumentation()
             raise
         except Exception as e:
-            if not self._self_instrumentation_completed:
-                if self._self_span and self._self_span.is_recording():
-                    self._self_span.set_status(Status(StatusCode.ERROR, str(e)))
-                    self._self_span.record_exception(e)
-                    self._self_span.end()
-                self._self_instrumentation_completed = True
+            self._fail(e)
             raise
 
         self._self_events.append(event)
@@ -69,6 +67,15 @@ class AgnoAsyncStream(ObjectProxy):
             self._self_final_result = event
 
         return event
+
+    def _fail(self, e):
+        """End the span with the error if it is still open."""
+        if not self._self_instrumentation_completed:
+            if self._self_span and self._self_span.is_recording():
+                self._self_span.set_status(Status(StatusCode.ERROR, str(e)))
+                self._self_span.record_exception(e)
+                self._self_span.end()
+            self._self_instrumentation_completed = True
 
     def _complete_instrumentation(self):
         """Complete the instrumentation when stream is fully consumed"""
@@ -165,6 +172,9 @@ class AgnoStream(ObjectProxy):
         try:
             if close := getattr(self.__wrapped__, "close", None):
                 close()
+        except Exception as e:
+            self._fail(e)
+            raise
         finally:
             self._complete_instrumentation()
 
@@ -176,12 +186,7 @@ class AgnoStream(ObjectProxy):
                 self._complete_instrumentation()
             raise
         except Exception as e:
-            if not self._self_instrumentation_completed:
-                if self._self_span and self._self_span.is_recording():
-                    self._self_span.set_status(Status(StatusCode.ERROR, str(e)))
-                    self._self_span.record_exception(e)
-                    self._self_span.end()
-                self._self_instrumentation_completed = True
+            self._fail(e)
             raise
 
         self._self_events.append(event)
@@ -190,6 +195,15 @@ class AgnoStream(ObjectProxy):
             self._self_final_result = event
 
         return event
+
+    def _fail(self, e):
+        """End the span with the error if it is still open."""
+        if not self._self_instrumentation_completed:
+            if self._self_span and self._self_span.is_recording():
+                self._self_span.set_status(Status(StatusCode.ERROR, str(e)))
+                self._self_span.record_exception(e)
+                self._self_span.end()
+            self._self_instrumentation_completed = True
 
     def _complete_instrumentation(self):
         """Complete the instrumentation when stream is fully consumed"""
